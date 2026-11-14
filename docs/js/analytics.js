@@ -278,3 +278,143 @@ function getPeakSeason(clim) {
     peakWeek: clim.weekOfYear[peakIdx]
   };
 }
+
+/**
+ * Fetch the live hotspot JSON (docs/data/live_hotspots.json).
+ * Resolves to the parsed object, or null if the request fails, the HTTP
+ * status is not ok, or the JSON has no "points" array. Never throws.
+ */
+function loadLiveData(url) {
+  return fetch(url)
+    .then(function (response) {
+      if (!response.ok) {
+        return null;
+      }
+      return response.json();
+    })
+    .then(function (live) {
+      // Validate the minimal structure we depend on.
+      if (!live || !Array.isArray(live.points)) {
+        return null;
+      }
+      return live;
+    })
+    .catch(function () {
+      // Network error, invalid JSON, etc.
+      return null;
+    });
+}
+
+/**
+ * Select live points whose 0.25 degree cell center lies inside the bounds.
+ * live   : object returned by loadLiveData (points = [lat, lon, date, time, frp])
+ * bounds : {south, west, north, east}
+ * Returns {points, count, latestDate, latestTime}; latest* are null if empty.
+ */
+function getLiveInAOI(live, bounds) {
+  var included = [];
+  var latestDate = null;
+  var latestTime = null;
+
+  var pts = (live && Array.isArray(live.points)) ? live.points : [];
+
+  for (var i = 0; i < pts.length; i++) {
+    var p = pts[i];
+
+    // Snap the point to its cell center (grid convention: 0.25 degree).
+    var cellLat = Math.floor(p[0] / 0.25) * 0.25 + 0.125;
+    var cellLon = Math.floor(p[1] / 0.25) * 0.25 + 0.125;
+
+    // Inside the area if the CELL CENTER is within bounds (inclusive).
+    if (cellLat >= bounds.south && cellLat <= bounds.north &&
+        cellLon >= bounds.west && cellLon <= bounds.east) {
+      included.push(p);
+
+      // Track the most recent point: compare date strings, then time strings.
+      // ("YYYY-MM-DD" and zero-padded "HHMM" sort correctly as strings.)
+      var date = p[2];
+      var time = p[3];
+      if (latestDate === null ||
+          date > latestDate ||
+          (date === latestDate && time > latestTime)) {
+        latestDate = date;
+        latestTime = time;
+      }
+    }
+  }
+
+  return {
+    points: included,
+    count: included.length,
+    latestDate: latestDate,
+    latestTime: latestTime
+  };
+}
+
+/**
+ * Compare live detection count in the AOI with the climatological
+ * expectation for the same ISO week.
+ * clim    : {weekOfYear:[1..53], mean:[], std:[]}
+ * live    : object returned by loadLiveData
+ * liveAOI : object returned by getLiveInAOI
+ * Returns {level, ratio, liveCount, expected, days, weekOfYear, message}
+ * where level is "normal", "elevated", "high" or "nodata".
+ */
+function getEarlyWarning(clim, live, liveAOI) {
+  var pts = (live && Array.isArray(live.points)) ? live.points : [];
+  var days = live ? live.days : null;
+
+  // No live points at all: nothing to compare.
+  if (pts.length === 0) {
+    return {
+      level: "nodata",
+      ratio: null,
+      liveCount: liveAOI ? liveAOI.count : 0,
+      expected: null,
+      days: days,
+      weekOfYear: null,
+      message: "No live data available."
+    };
+  }
+
+  // Most recent acquisition date among ALL live points (not only the AOI).
+  var latest = pts[0][2];
+  for (var i = 1; i < pts.length; i++) {
+    if (pts[i][2] > latest) {
+      latest = pts[i][2];
+    }
+  }
+  var w = isoWeek(latest);
+
+  // Expected count for the live window: weekly mean scaled to `days`,
+  // with a floor of 1 to avoid division by zero / inflated ratios.
+  var expected = Math.max(clim.mean[w - 1] * days / 7, 1);
+
+  var ratio = liveAOI.count / expected;
+
+  // Classify the ratio.
+  var level;
+  if (ratio >= 2) {
+    level = "high";
+  } else if (ratio >= 1.3) {
+    level = "elevated";
+  } else {
+    level = "normal";
+  }
+
+  var message = "Last " + days + " days: " + liveAOI.count +
+    " detections vs about " + Math.round(expected) +
+    " normally for ISO week " + w +
+    " (" + ratio.toFixed(1) + "x normal): " + level.toUpperCase() +
+    ". This compares near-real-time VIIRS detections with the harmonized history.";
+
+  return {
+    level: level,
+    ratio: ratio,
+    liveCount: liveAOI.count,
+    expected: expected,
+    days: days,
+    weekOfYear: w,
+    message: message
+  };
+}
