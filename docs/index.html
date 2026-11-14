@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Burning Activity Calendar</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Burning Activity Calendar</h1>
+    <p class="subtitle">Harmonized MODIS + VIIRS fire hotspots, 2000 to present, with a near-real-time layer</p>
+  </header>
+
+  <main class="layout">
+    <section class="col col-left">
+      <div id="map"></div>
+      <div id="live-status"></div>
+      <div id="warning"></div>
+      <div id="status"></div>
+      <div id="summary"></div>
+    </section>
+
+    <section class="col col-right">
+      <div id="calendar-chart" class="chart-card"></div>
+      <div id="climatology-chart" class="chart-card"></div>
+      <div id="anomaly-chart" class="chart-card"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    Research prototype. Not an official warning system. Hotspot counts are satellite detections, not burned area. Data: NASA FIRMS (MODIS, VIIRS S-NPP).
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  <script src="js/map.js"></script>
+  <script src="js/analytics.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
